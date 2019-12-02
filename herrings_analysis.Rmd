@@ -1,0 +1,39 @@
+---
+title: "Herrings analysis"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+author: 'Piotr Kaszuba & Mateusz Norel'
+params:
+  dataset_name: "sledzie.csv"
+  dataset_url: "http://www.cs.put.poznan.pl/alabijak/emd/projekt/sledzie.csv"
+  na_chars: "?"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+```{r results='hide'}
+library("RCurl")
+library(dplyr)
+```
+```{r loading_data}
+if(file.exists(params$dataset_name)) {
+  dataset <- read.csv(params$dataset_name, na.strings = params$na_chars)
+} else if(url.exists(params$dataset_url)){
+  download.file(params$dataset_url, params$dataset_name)
+  dataset <- read.csv(params$dataset_name, na.strings = params$na_chars)
+} else {
+  stop("There is no file nor url resource to work with!")
+}
+
+herrings <- tbl_df(dataset)
+```
+
+```{r}
+
+```
