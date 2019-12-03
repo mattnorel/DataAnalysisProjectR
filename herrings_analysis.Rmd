@@ -1,26 +1,47 @@
 ---
-title: "Herrings analysis"
+title: "Analysis of Herrings Dataset"
 output: 
   html_document:
     toc: true
     toc_float: true
-author: 'Piotr Kaszuba & Mateusz Norel'
+author: "Piotr Kaszuba & Mateusz Norel"
+date: "`r format(Sys.time(), '%d %B %Y')`"
 params:
   dataset_name: "sledzie.csv"
   dataset_url: "http://www.cs.put.poznan.pl/alabijak/emd/projekt/sledzie.csv"
   na_chars: "?"
 ---
 
-```{r setup, include=FALSE}
+```{r markdown_setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Introduction
+## Used Packages
 
-```{r results='hide'}
+Loading libaries:
+```{r loading_libraries, results='hide', message=FALSE}
 library("RCurl")
 library(dplyr)
+library(readr)
+library(tidyr)
+library(stringr)
+library(knitr)
+library(mice)
+library(VIM)
 ```
+Listing of libraries loaded during code execution can be found in the cell below:
+```{r printing_libraries, echo=FALSE}
+s <- sessionInfo()
+lib_str <- c()
+
+for(p in s$loadedOnly){
+  lib_str <- lib_str %>% append(p$Package)
+}
+str_c(lib_str, collapse=', ')
+```
+## Loading Data
+
+Data is loded accoring to the metadata provided in the `params` object, where a location of a dataset (both local and url) is provided. Mentioned object contains also information about expected form of missing data. In this case 
 ```{r loading_data}
 if(file.exists(params$dataset_name)) {
   dataset <- read.csv(params$dataset_name, na.strings = params$na_chars)
@@ -30,10 +51,47 @@ if(file.exists(params$dataset_name)) {
 } else {
   stop("There is no file nor url resource to work with!")
 }
+```
+First sight at first raws from dataset will help us get better view on the data.
+```{r}
+head(dataset)
+```
+Here are names of all columns available in a raw dataset:
+```{r}
+dataset %>%
+  colnames %>%
+  print
+```
 
+After that dataset can be transferred to dyplr's `DataFrame` object.
+By selecting just columns with `numeric` type and then checking if all column names match those from the raw set, we can make sure that all columns are ready for further work.
+```{r}
 herrings <- tbl_df(dataset)
+herrings %>% 
+  select_if(is.numeric) %>%
+  colnames
+```
+
+All columns were extracted correctly and do not contain anything different from numeric variables. But there are still missing values (`NA`'s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
+
+We started with the list of columns that have at least one `NA` value.
+```{r}
+cols_with_na = c()
+for(col in colnames(herrings)){
+  if(any(is.na(herrings[col]))){
+    cols_with_na <- cols_with_na %>% append(col)
+  }
+}
+cols_with_na
+```
+There are `r length(cols_with_na)` such columns in herrings dataset. 
+
+```{r}
+just_with_na <- herrings %>% select(cols_with_na)
+aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
 ```{r}
+colormapMiss(just_with_na, interactive = TRUE)
 
 ```
