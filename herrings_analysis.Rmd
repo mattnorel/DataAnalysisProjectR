@@ -86,12 +86,11 @@ cols_with_na
 ```
 There are `r length(cols_with_na)` such columns in herrings dataset. 
 
-```{r}
+```{r message=FALSE}
 just_with_na <- herrings %>% select(cols_with_na)
-aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=TRUE, bars=FALSE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
 ```{r}
-colormapMiss(just_with_na, interactive = TRUE)
 
 ```
