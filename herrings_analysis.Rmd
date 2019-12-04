@@ -76,6 +76,12 @@ herrings %>%
   colnames
 ```
 
+It is also required to transform `xmonth` column to cathegorical, as its values are months.
+```{r}
+herrings <- herrings %>%
+  mutate(xmonth = as.factor(xmonth))
+```
+
 ## Missing Values
 All columns were extracted correctly and do not contain anything different from numeric variables. But there are still missing values (`NA`s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
 
@@ -105,14 +111,25 @@ just_with_na <- herrings %>% select(cols_with_na)
 aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=FALSE, bars=TRUE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.8, gap=3, ylab=c("Histogram of missing data","Missing data pattern"))
 ```
 
-## Imputing Missing Data
 ```{r}
-methods(mice)
+head(herrings)
 ```
 
+## Imputing Missing Data
+```{r}
+set.seed(17)
+imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal')), meth='pmm', maxit=5)
+
+```
+
+```{r}
+tmp_data <- complete(inputed,1)
+head(mutate(tmp_data, sal = herrings$sal))
+```
 
 ## Attribute-wise Analysis
 ```{r}
 kable_styling(kable(summary(herrings)))
+
 ```
 
