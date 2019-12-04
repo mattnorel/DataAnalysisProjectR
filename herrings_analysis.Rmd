@@ -26,6 +26,7 @@ library(readr)
 library(tidyr)
 library(stringr)
 library(knitr)
+library(kableExtra)
 library(mice)
 library(VIM)
 ```
@@ -52,10 +53,13 @@ if(file.exists(params$dataset_name)) {
   stop("There is no file nor url resource to work with!")
 }
 ```
-First sight at first raws from dataset will help us get better view on the data.
+
+## Dataset
+First sight at some rows from dataset will help us get better view on the data.
 ```{r}
 head(dataset)
 ```
+
 Here are names of all columns available in a raw dataset:
 ```{r}
 dataset %>%
@@ -72,7 +76,8 @@ herrings %>%
   colnames
 ```
 
-All columns were extracted correctly and do not contain anything different from numeric variables. But there are still missing values (`NA`'s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
+## Missing Values
+All columns were extracted correctly and do not contain anything different from numeric variables. But there are still missing values (`NA`s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
 
 We started with the list of columns that have at least one `NA` value.
 ```{r}
@@ -85,12 +90,29 @@ for(col in colnames(herrings)){
 cols_with_na
 ```
 There are `r length(cols_with_na)` such columns in herrings dataset. 
+We decided to make another dataframe where all rows with `NA` value were omitted. It was done for the purpose of graphical analysis. Still regression was conducted on the dataset with values inputed in place of `NA`s. This imputation step was done in further cells.
+```{r}
+df_no_na <- na.omit(herrings)
+```
 
+Before making any decision about missing data it is important to somehow visualize it. It is recommended to not reconstruct variable if more than 5% of the data is not available. Also it is worth knowing missing data pattern. If it's random it is good idea to try some imputation methods. But if it seems that there is some reason for data being not available it's better to consider other methods (profound analysis of data gathering process is a way to start).
+
+Following plots contains interesting information about missing data. It was done using VIM's `aggr` function on dataset with just those columns which contain at least `NA` value. Left figure, "Histogram of missing data" informs us how many values of each column are missing. We can see that it is around 3% of all values for each column. It is less than mentioned 5% so data reconstruction is worth considering. More than that, as all columns has around 3% missing data it is first hint that not availability might be caused by some random process. The right chart, "Missing data pattern", shows what is the pattern of missing data. All combinations of missing data were captured from the dataset and presented. Red color symbolizes `NA`, while blue indicate that correct value is available. Most common combinations are at the very bottom. Moving to the top there are less and less frequent combinations. 
+
+It seems that there are no strong relations between missing values. Next step is an imputation.
 ```{r message=FALSE}
 just_with_na <- herrings %>% select(cols_with_na)
-aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=TRUE, bars=FALSE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=FALSE, bars=TRUE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.8, gap=3, ylab=c("Histogram of missing data","Missing data pattern"))
 ```
 
+## Imputing Missing Data
 ```{r}
-
+methods(mice)
 ```
+
+
+## Attribute-wise Analysis
+```{r}
+kable_styling(kable(summary(herrings)))
+```
+
