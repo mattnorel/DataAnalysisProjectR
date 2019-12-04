@@ -29,6 +29,8 @@ library(knitr)
 library(kableExtra)
 library(mice)
 library(VIM)
+library(e1071)
+library(ggplot2)
 ```
 Listing of libraries loaded during code execution can be found in the cell below:
 ```{r printing_libraries, echo=FALSE}
@@ -96,10 +98,7 @@ for(col in colnames(herrings)){
 cols_with_na
 ```
 There are `r length(cols_with_na)` such columns in herrings dataset. 
-We decided to make another dataframe where all rows with `NA` value were omitted. It was done for the purpose of graphical analysis. Still regression was conducted on the dataset with values inputed in place of `NA`s. This imputation step was done in further cells.
-```{r}
-df_no_na <- na.omit(herrings)
-```
+
 
 Before making any decision about missing data it is important to somehow visualize it. It is recommended to not reconstruct variable if more than 5% of the data is not available. Also it is worth knowing missing data pattern. If it's random it is good idea to try some imputation methods. But if it seems that there is some reason for data being not available it's better to consider other methods (profound analysis of data gathering process is a way to start).
 
@@ -123,13 +122,88 @@ imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal'
 ```
 
 ```{r}
-tmp_data <- complete(inputed,1)
-head(mutate(tmp_data, sal = herrings$sal))
+tmp_data <- complete(imputed,1)
+imputed_data = mutate(tmp_data, sal = herrings$sal)
+head(imputed_data)
 ```
 
 ## Attribute-wise Analysis
 ```{r}
-kable_styling(kable(summary(herrings)))
+kable_styling(kable(summary(imputed_data)))
+```
+It is standard practice to check distributions of data plotting histograms and measure the distribution skewness.
+
+```{r}
+
+for(col in colnames(imputed_data)){
+  if(col != "X"){
+  plot <- qplot(imputed_data[[col]], xlab=col)
+  print(plot)
+  print(skewness(imputed_data[[col]]))
+  }
+}
+```
+There are some variables that should be looked closer upon. For those that skewness was > 2 a log transform will be used. There could be more analysis done to all of the variables but authors decide that it is enough to further investigate only some of them. Depending on the number of zeros there will be a constant (before a log transform) added or dummy variable introduced that takes value of 1 if the column was zero and 0 otherwise. This way a more suitable distribution can be obtained and important information regarding zeros in the data kept.
+
+```{r} 
+number_of_zeros = NROW(imputed_data$cfin1[imputed_data$cfin1== 0])
 
 ```
 
+For the variable cfin1 - log transform was used and a dummy variable introduced. There were  `r number_of_zeros/NROW(imputed_data)`% zero values in this column.
+
+```{r}
+  print(paste("Number of zeros: ", number_of_zeros))
+  imputed_data$cfin1Changed[imputed_data$cfin1 > 0] <- log(imputed_data$cfin1[imputed_data$cfin1 > 0])
+  imputed_data$cfin1Changed[imputed_data$cfin1 <= 0] <- 0
+  plot <- qplot(imputed_data$cfin1Changed[imputed_data$cfin1 > 0], xlab="cfin1", binwidth=0.4)
+  print(plot)
+  
+  imputed_data$cfin1Zero <- as.numeric(imputed_data$cfin1 == 0)
+  print(qplot(imputed_data$cfin1Zero,xlab="cfin1Zero"))
+```
+```{r} 
+number_of_zeros = NROW(imputed_data$cfin2[imputed_data$cfin2== 0])
+
+```
+
+Same technique was used for cfin2 variable as there were still `r number_of_zeros/NROW(imputed_data)`% records with zero values.
+```{r}
+  print(paste("Number of zeros: ", number_of_zeros))
+  imputed_data$cfin2Changed[imputed_data$cfin2 > 0] <- log(imputed_data$cfin2[imputed_data$cfin2 > 0])
+  imputed_data$cfin2Changed[imputed_data$cfin2 <= 0] <- 0
+  plot <- qplot(imputed_data$cfin2Changed[imputed_data$cfin2 > 0], xlab="cfin2", binwidth=0.4)
+  print(plot)
+  
+  imputed_data$cfin2Zero <- as.numeric(imputed_data$cfin2 == 0)
+  print(qplot(imputed_data$cfin2Zero,xlab="cfin2Zero"))
+  
+```
+```{r} 
+number_of_zeros = NROW(imputed_data$chel1[imputed_data$chel1== 0])
+
+```
+
+For 'chel1' there were `r number_of_zeros/NROW(imputed_data)`% zero values (<5%) that is why log transform with an added constant was preferred. The 5% value is not a rule but rather a threshold authors decided on. More appropriate solution could be to test all possible variable setups.
+```{r}
+  print(paste("Number of zeros: ", number_of_zeros))
+  imputed_data$chel1Changed <- log(imputed_data$chel1 +1)
+  
+  plot <- qplot(imputed_data$chel1Changed, xlab="chel1", binwidth=0.4)
+  print(plot)
+  
+```
+```{r} 
+number_of_zeros = NROW(imputed_data$lcop1[imputed_data$lcop1== 0])
+
+```
+
+"lcop1" was only log transformed with an added constant. There were `r number_of_zeros/NROW(imputed_data)`% zero values!
+
+```{r}
+  print(paste("Number of zeros: ", number_of_zeros))
+  imputed_data$lcop1Changed <- log(imputed_data$lcop1 +1)
+  plot <- qplot(imputed_data$lcop1Changed, xlab="lcop1", binwidth=0.1)
+  print(plot)
+  
+```
