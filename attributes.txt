@@ -1,0 +1,16 @@
+Dataset contains following attributes:
+- length - length of the fished herring [cm]
+- cfin1 - density of Calanus finmarchicus kat. 1 plankton
+- cfin2 - density of Calanus finmarchicus kat. 2 plankton
+- chel1 - density of Calanus helgolandicus kat. 1 plankton
+- chel2 - density of Calanus helgolandicus kat. 2 plankton
+- lcop1 - density of copepods kat. 1
+- lcop2 - density of copepods kat. 2
+- fbar - intensity of fishing in region [remaining part of herring fry]
+- recr - annual number of herrings
+- cumf - intensity of annual fishing in region [remaining part of herring fry]
+- totaln - number of fished herrings
+- sst - sea surface temperature [Celsius]
+- sal - salinity [Kundsen ppt]
+- xmonth - number of fishing month
+- nao - north atlantic oscillation [mean sea level pressure]

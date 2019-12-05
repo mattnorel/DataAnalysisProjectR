@@ -31,6 +31,8 @@ library(mice)
 library(VIM)
 library(e1071)
 library(ggplot2)
+library(corrplot)
+library(plotly)
 ```
 Listing of libraries loaded during code execution can be found in the cell below:
 ```{r printing_libraries, echo=FALSE}
@@ -57,16 +59,30 @@ if(file.exists(params$dataset_name)) {
 ```
 
 ## Dataset
-First sight at some rows from dataset will help us get better view on the data.
+
+To see dimensionality we've used `dim` function:
 ```{r}
-head(dataset)
+dim(dataset)
 ```
+There are 52582 row and 16 columns.
 
 Here are names of all columns available in a raw dataset:
 ```{r}
 dataset %>%
   colnames %>%
   print
+```
+
+First sight at some rows from dataset will help us get better view on the data.
+```{r}
+head(dataset)
+```
+
+
+Names of some columns may be ambiguous. This is brief explanation:
+```{r echo=FALSE}
+lines <- read_lines("attributes.txt")
+cat(paste(lines, collapse = "\n"))
 ```
 
 After that dataset can be transferred to dyplr's `DataFrame` object.
@@ -78,7 +94,7 @@ herrings %>%
   colnames
 ```
 
-It is also required to transform `xmonth` column to cathegorical, as its values are months.
+It is also required to transform `xmonth` column to cathegorical, as its values are numbers of months.
 ```{r}
 herrings <- herrings %>%
   mutate(xmonth = as.factor(xmonth))
@@ -87,7 +103,7 @@ herrings <- herrings %>%
 ## Missing Values
 All columns were extracted correctly and do not contain anything different from numeric variables. But there are still missing values (`NA`s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
 
-We started with the list of columns that have at least one `NA` value.
+We started with showing the list of columns that have at least one `NA` value.
 ```{r}
 cols_with_na = c()
 for(col in colnames(herrings)){
@@ -99,7 +115,6 @@ cols_with_na
 ```
 There are `r length(cols_with_na)` such columns in herrings dataset. 
 
-
 Before making any decision about missing data it is important to somehow visualize it. It is recommended to not reconstruct variable if more than 5% of the data is not available. Also it is worth knowing missing data pattern. If it's random it is good idea to try some imputation methods. But if it seems that there is some reason for data being not available it's better to consider other methods (profound analysis of data gathering process is a way to start).
 
 Following plots contains interesting information about missing data. It was done using VIM's `aggr` function on dataset with just those columns which contain at least `NA` value. Left figure, "Histogram of missing data" informs us how many values of each column are missing. We can see that it is around 3% of all values for each column. It is less than mentioned 5% so data reconstruction is worth considering. More than that, as all columns has around 3% missing data it is first hint that not availability might be caused by some random process. The right chart, "Missing data pattern", shows what is the pattern of missing data. All combinations of missing data were captured from the dataset and presented. Red color symbolizes `NA`, while blue indicate that correct value is available. Most common combinations are at the very bottom. Moving to the top there are less and less frequent combinations. 
@@ -110,12 +125,8 @@ just_with_na <- herrings %>% select(cols_with_na)
 aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=FALSE, bars=TRUE, sortVars=TRUE, labels=names(just_with_na), cex.axis=.8, gap=3, ylab=c("Histogram of missing data","Missing data pattern"))
 ```
 
-```{r}
-head(herrings)
-```
-
 ## Imputing Missing Data
-```{r}
+```{r message=FALSE}
 set.seed(17)
 imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal')), meth='pmm', maxit=5)
 
@@ -124,15 +135,35 @@ imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal'
 ```{r}
 tmp_data <- complete(imputed,1)
 imputed_data = mutate(tmp_data, sal = herrings$sal)
-head(imputed_data)
 ```
 
 ## Attribute-wise Analysis
+
+We started studying attributes by showing their summary which contains basic statistical metrics. There are no missing values as we got rid of them earlier.
 ```{r}
 kable_styling(kable(summary(imputed_data)))
 ```
-It is standard practice to check distributions of data plotting histograms and measure the distribution skewness.
 
+Figure below presents correlation matrix (or rather its upper part). Attribute `length` is negatively correlated with sea surface temperature, but besides that it is fairly weakly connected with other attributes.
+```{r}
+#corrplot(imputed_data, type="upper", order="hclust", tl.col="black", tl.srt=45)
+cor_data <- select(imputed_data, -c('xmonth', 'X'))
+corrplot(cor(cor_data), type='upper', order='hclust', tl.col='black', tl.srt=55, title="Correlation matrix")
+```
+
+The chart below presents how a leanth of herrings was changing over time. Blue line is an effect of smooth function. It allows us to clearly see trend present in data. There is noticeable breakpoint.
+```{r}
+skip_every <- 50
+tmp <- imputed_data %>%
+          slice(seq(1, nrow(imputed_data), skip_every))
+
+p <- ggplot(tmp, aes(x=X, y=length)) +
+    geom_point(shape=1) + stat_smooth()
+p <- ggplotly(p)
+p
+```
+
+It is standard practice to check distributions of data plotting histograms and measure the distribution skewness.
 ```{r}
 
 for(col in colnames(imputed_data)){
