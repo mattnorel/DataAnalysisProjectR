@@ -4,6 +4,9 @@ output:
   html_document:
     toc: true
     toc_float: true
+    keep_md: true
+  md_document:
+    variant: markdown_github
 author: "Piotr Kaszuba & Mateusz Norel"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 params:
@@ -33,6 +36,9 @@ library(e1071)
 library(ggplot2)
 library(corrplot)
 library(plotly)
+library(caret)
+library(doMC)
+library(xgboost)
 ```
 Listing of libraries loaded during code execution can be found in the cell below:
 ```{r printing_libraries, echo=FALSE}
@@ -126,13 +132,11 @@ aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=FALSE, bars=TRU
 ```
 
 ## Imputing Missing Data
+
+In order to reconstruct missing data we used a `mice` library (Multivariate Imputation By Chained Equations). Seed for a random generator was set to 17. MICE tries to imput values in places of missing data based on the context from other attributes. One of attributes, `sal`, had to be excluded from this step as its participation resulted in error. MICE supports many methods from which one could choose by first trying its reconstruction results on smaller subsequence of data and compare that to ground truth. We omitted that step and went straight to fairly good `pmm` imputation method. Its name stands for "Predictive Mean Matching.
 ```{r message=FALSE}
 set.seed(17)
-imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal')), meth='pmm', maxit=5)
-
-```
-
-```{r}
+imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal')), meth='pmm', maxit=1)
 tmp_data <- complete(imputed,1)
 imputed_data = mutate(tmp_data, sal = herrings$sal)
 ```
@@ -152,10 +156,9 @@ corrplot(cor(cor_data), type='upper', order='hclust', tl.col='black', tl.srt=55,
 ```
 
 The chart below presents how a leanth of herrings was changing over time. Blue line is an effect of smooth function. It allows us to clearly see trend present in data. There is noticeable breakpoint.
-```{r}
-skip_every <- 50
+```{r message=FALSE}
 tmp <- imputed_data %>%
-          slice(seq(1, nrow(imputed_data), skip_every))
+          dplyr::slice(seq(1, nrow(imputed_data), 50))
 
 p <- ggplot(tmp, aes(x=X, y=length)) +
     geom_point(shape=1) + stat_smooth()
@@ -168,7 +171,7 @@ It is standard practice to check distributions of data plotting histograms and m
 
 for(col in colnames(imputed_data)){
   if(col != "X"){
-  plot <- qplot(imputed_data[[col]], xlab=col)
+  plot <- qplot(imputed_data[[col]], xlab=col) + ggtitle("")
   print(plot)
   print(skewness(imputed_data[[col]]))
   }
@@ -183,11 +186,11 @@ number_of_zeros = NROW(imputed_data$cfin1[imputed_data$cfin1== 0])
 
 For the variable cfin1 - log transform was used and a dummy variable introduced. There were  `r number_of_zeros/NROW(imputed_data)`% zero values in this column.
 
-```{r}
+```{r message=FALSE}
   print(paste("Number of zeros: ", number_of_zeros))
   imputed_data$cfin1Changed[imputed_data$cfin1 > 0] <- log(imputed_data$cfin1[imputed_data$cfin1 > 0])
   imputed_data$cfin1Changed[imputed_data$cfin1 <= 0] <- 0
-  plot <- qplot(imputed_data$cfin1Changed[imputed_data$cfin1 > 0], xlab="cfin1", binwidth=0.4)
+  plot <- qplot(imputed_data$cfin1Changed[imputed_data$cfin1 > 0], xlab="cfin1", binwidth=0.05)
   print(plot)
   
   imputed_data$cfin1Zero <- as.numeric(imputed_data$cfin1 == 0)
@@ -199,11 +202,11 @@ number_of_zeros = NROW(imputed_data$cfin2[imputed_data$cfin2== 0])
 ```
 
 Same technique was used for cfin2 variable as there were still `r number_of_zeros/NROW(imputed_data)`% records with zero values.
-```{r}
+```{r message=FALSE}
   print(paste("Number of zeros: ", number_of_zeros))
   imputed_data$cfin2Changed[imputed_data$cfin2 > 0] <- log(imputed_data$cfin2[imputed_data$cfin2 > 0])
   imputed_data$cfin2Changed[imputed_data$cfin2 <= 0] <- 0
-  plot <- qplot(imputed_data$cfin2Changed[imputed_data$cfin2 > 0], xlab="cfin2", binwidth=0.4)
+  plot <- qplot(imputed_data$cfin2Changed[imputed_data$cfin2 > 0], xlab="cfin2", binwidth=0.05)
   print(plot)
   
   imputed_data$cfin2Zero <- as.numeric(imputed_data$cfin2 == 0)
@@ -220,7 +223,7 @@ For 'chel1' there were `r number_of_zeros/NROW(imputed_data)`% zero values (<5%)
   print(paste("Number of zeros: ", number_of_zeros))
   imputed_data$chel1Changed <- log(imputed_data$chel1 +1)
   
-  plot <- qplot(imputed_data$chel1Changed, xlab="chel1", binwidth=0.4)
+  plot <- qplot(imputed_data$chel1Changed, xlab="chel1", binwidth=0.05)
   print(plot)
   
 ```
@@ -234,7 +237,38 @@ number_of_zeros = NROW(imputed_data$lcop1[imputed_data$lcop1== 0])
 ```{r}
   print(paste("Number of zeros: ", number_of_zeros))
   imputed_data$lcop1Changed <- log(imputed_data$lcop1 +1)
-  plot <- qplot(imputed_data$lcop1Changed, xlab="lcop1", binwidth=0.1)
+  plot <- qplot(imputed_data$lcop1Changed, xlab="lcop1", binwidth=0.05)
   print(plot)
   
+```
+
+## Regression
+
+First we start with turning `xmonth` into dummy variable. Now there are new columns for each month. Zero indicates that sample was not taken in this month and one if it was taken in month which is specified in the name of the column.
+```{r}
+reg_data <- model.matrix(X ~ ., imputed_data)
+head(reg_data)
+```
+
+Some attributes in this dataset has values measured in tens of thousands while others never exceeds a value of one. If our data will stay in that form some attributes will contribute greatly to the final result while others will be ignored. To make sure that all data equaly participates in learning process it has to be normalized in one way or another. We decided to use simple scale and centering methods from `caret` library. But before that data had to be divided into test and training set. Fitting normalization model can be done just on training dataset, as it would introduce data leak if conducted on the whole dataset.
+
+```{r}
+ctrl <- trainControl(method = "cv", number=8, preProcOptions = c(pcaComp=32), allowParallel = TRUE)
+grid <- expand.grid()
+lm <- train(length~., data = reg_data, method='lm', trControl=ctrl, preProcess=c('center', 'scale', 'pca'))
+lm
+```
+
+```{r}
+registerDoMC(cores=4)
+ctrl <- trainControl(method = "cv", number=8, preProcOptions = c(psaComp=3), allowParallel = TRUE)
+grid <- expand.grid(max_depth=c(3,4,5), 
+                    subsample=c(1.0), 
+                    nrounds=c(200),
+                    eta=c(0.4, 0.3),
+                    gamma=c(0.001,0.01),
+                    colsample_bytree=c(0.7),
+                    min_child_weight=c(1.0, 0.5))
+xgb_tree <- train(length~., data = reg_data, method='xgbTree', trControl=ctrl, tuneGrid=grid, preProcess=c('center', 'scale'))
+xgb_tree
 ```
