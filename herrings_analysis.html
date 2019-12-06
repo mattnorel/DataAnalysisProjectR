@@ -1220,9 +1220,6 @@ corrplot(cor(cor_data), type=&#39;upper&#39;, order=&#39;hclust&#39;, tl.col=&#3
 <pre><code>## [1] &quot;Skewness: -0.0488869050329582&quot;</code></pre>
 <p><img src="herrings_analysis_files/figure-html/unnamed-chunk-13-13.png" /><!-- --></p>
 <pre><code>## [1] &quot;Skewness: -0.537466666995026&quot;</code></pre>
-<pre><code>## Warning in mean.default(x): argument is not numeric or logical: returning
-## NA</code></pre>
-<pre><code>## Warning in Ops.factor(x, mean(x)): &#39;-&#39; not meaningful for factors</code></pre>
 <p><img src="herrings_analysis_files/figure-html/unnamed-chunk-13-14.png" /><!-- --></p>
 <pre><code>## [1] &quot;Skewness: NA&quot;</code></pre>
 <p><img src="herrings_analysis_files/figure-html/unnamed-chunk-13-15.png" /><!-- --></p>
@@ -1979,29 +1976,7 @@ lcop1Changed
 <p>Linear model was our first choice. Model was evaluated in 8-fold cross-validation. Parameters for preprocessing were set to centering and scaling to make sure that each training set will receive its own normalization process.</p>
 <pre class="r"><code>ctrl &lt;- trainControl(method = &quot;cv&quot;, number=8, allowParallel = TRUE)
 lm &lt;- train(length~., data = reg_data, method=&#39;lm&#39;, trControl=ctrl, preProcess=c(&#39;center&#39;, &#39;scale&#39;))</code></pre>
-<pre><code>## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
 
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
-
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
-
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
-
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
-
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
-
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading
-
-## Warning in predict.lm(modelFit, newdata): prediction from a rank-deficient
-## fit may be misleading</code></pre>
 <pre class="r"><code>lm</code></pre>
 <pre><code>## Linear Regression 
 ## 
