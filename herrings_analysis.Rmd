@@ -1,12 +1,14 @@
 ---
 title: "Analysis of Herrings Dataset"
 output: 
-  md_document:
-    variant: markdown_github
   html_document:
     toc: true
     toc_float: true
+    self_contained: false
     keep_md: true
+  md_document:
+    toc: true
+    variant: markdown_github
 author: "Piotr Kaszuba & Mateusz Norel"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 params:
@@ -19,11 +21,15 @@ params:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Summary
+
+Following work is an analysis of herrings dataset. Our assignment was to find what causes herrings to became shorter and shorter over time. Analysis contains a survey of attributes, dealing with missing values, inspecting correlations between values, value transformation and normalization. Everything finished with regression and checking for the most important attribute, which turned out to be a `sea surface temperature` attribute.
+
 ## Used Packages
 
 Loading libaries:
 ```{r loading_libraries, results='hide', message=FALSE}
-library("RCurl")
+library(RCurl)
 library(dplyr)
 library(readr)
 library(tidyr)
@@ -40,6 +46,7 @@ library(caret)
 library(doMC)
 library(xgboost)
 ```
+
 Listing of libraries loaded during code execution can be found in the cell below:
 ```{r printing_libraries, echo=FALSE}
 s <- sessionInfo()
@@ -81,18 +88,21 @@ dataset %>%
 
 First sight at some rows from dataset will help us get better view on the data.
 ```{r}
-head(dataset)
+head(dataset) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c('striped', 'hover')) %>%
+  scroll_box(width = '100%')
 ```
+We can see that all available data is numerical. There are some `NA` values. Column `xmonth` should be changed to dummy values before regression.
 
-
-Names of some columns may be ambiguous. This is brief explanation:
+Names of some columns may be ambiguous. This is their brief explanation:
 ```{r echo=FALSE}
 lines <- read_lines("attributes.txt")
 cat(paste(lines, collapse = "\n"))
 ```
 
-After that dataset can be transferred to dyplr's `DataFrame` object.
-By selecting just columns with `numeric` type and then checking if all column names match those from the raw set, we can make sure that all columns are ready for further work.
+After that step, dataset could be transferred to dyplr's `DataFrame` object.
+By selecting just columns with `numeric` type and then checking if all column names match those from the raw set, we were able to make sure that all columns are ready for further work.
 ```{r}
 herrings <- tbl_df(dataset)
 herrings %>% 
@@ -100,14 +110,14 @@ herrings %>%
   colnames
 ```
 
-It is also required to transform `xmonth` column to cathegorical, as its values are numbers of months.
+It was also required to transform `xmonth` column to cathegorical, as its values are numbers of months.
 ```{r}
 herrings <- herrings %>%
   mutate(xmonth = as.factor(xmonth))
 ```
 
 ## Missing Values
-All columns were extracted correctly and do not contain anything different from numeric variables. But there are still missing values (`NA`s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
+All columns were extracted correctly and do not contain anything different to numeric variables. But there are still missing values (`NA`s) in the dataframe. Before deciding what to do with them it is crucial to know how many rows have `NA` value.
 
 We started with showing the list of columns that have at least one `NA` value.
 ```{r}
@@ -119,11 +129,11 @@ for(col in colnames(herrings)){
 }
 cols_with_na
 ```
-There are `r length(cols_with_na)` such columns in herrings dataset. 
+There are `r length(cols_with_na)` such columns in the herrings dataset. 
 
-Before making any decision about missing data it is important to somehow visualize it. It is recommended to not reconstruct variable if more than 5% of the data is not available. Also it is worth knowing missing data pattern. If it's random it is good idea to try some imputation methods. But if it seems that there is some reason for data being not available it's better to consider other methods (profound analysis of data gathering process is a way to start).
+Before making any decision about missing data it is important to visualize it. It is recommended to not reconstruct variable if more than 5% of the data is not available. Also it is worth knowing missing data pattern. If it's random it is good idea to try some imputation methods. But if it seems that there is some reason for data being not available it's better to consider other methods (profound analysis of data gathering process is a reasonable way to start).
 
-Following plots contains interesting information about missing data. It was done using VIM's `aggr` function on dataset with just those columns which contain at least `NA` value. Left figure, "Histogram of missing data" informs us how many values of each column are missing. We can see that it is around 3% of all values for each column. It is less than mentioned 5% so data reconstruction is worth considering. More than that, as all columns has around 3% missing data it is first hint that not availability might be caused by some random process. The right chart, "Missing data pattern", shows what is the pattern of missing data. All combinations of missing data were captured from the dataset and presented. Red color symbolizes `NA`, while blue indicate that correct value is available. Most common combinations are at the very bottom. Moving to the top there are less and less frequent combinations. 
+Following plots contains interesting information about missing data. Their were done using VIM's `aggr` function on dataset with just those columns which contain at least one `NA` value. Left figure, "Histogram of missing data" informs us how many values of each column are missing. We can see that it is around 3% of all values for each column are missing. It is less than mentioned 5% so data reconstruction is worth considering. More than that, as all columns have around 3% missing data it is a first hint that not availability might be caused by some random process. The right-side chart, "Missing data pattern", shows what is the pattern of missing data. All combinations of missing data were captured from the dataset and presented. Red color symbolizes `NA`, while blue indicates that correct value is available. Most common combinations are at the very bottom. Moving to the top there are less and less frequent combinations. 
 
 It seems that there are no strong relations between missing values. Next step is an imputation.
 ```{r message=FALSE}
@@ -133,30 +143,32 @@ aggr_plot <- aggr(just_with_na, col=c('navyblue','red'), numbers=FALSE, bars=TRU
 
 ## Imputing Missing Data
 
-In order to reconstruct missing data we used a `mice` library (Multivariate Imputation By Chained Equations). Seed for a random generator was set to 17. MICE tries to imput values in places of missing data based on the context from other attributes. One of attributes, `sal`, had to be excluded from this step as its participation resulted in error. MICE supports many methods from which one could choose by first trying its reconstruction results on smaller subsequence of data and compare that to ground truth. We omitted that step and went straight to fairly good `pmm` imputation method. Its name stands for "Predictive Mean Matching.
+In order to reconstruct missing data we've used a `mice` library (Multivariate Imputation By Chained Equations). Seed for a random generator was set to 17. MICE tries to imput values in places of missing data based on the context from other attributes. One of attributes, `sal`, had to be excluded from this step as its participation resulted in error. MICE supports many methods from which it is might be a good idea to choose by first trying its reconstruction results on smaller subsequence of data and compare that to ground truth. We omitted that step and went straight to fairly good `pmm` imputation method. Its name stands for "Predictive Mean Matching.
 ```{r message=FALSE}
 set.seed(17)
 imputed <- mice(herrings,predictorMatrix = quickpred(herrings, exclude = c('sal')), meth='pmm', maxit=1)
 tmp_data <- complete(imputed,1)
-imputed_data = mutate(tmp_data, sal = herrings$sal)
+imputed_data <- mutate(tmp_data, sal = herrings$sal)
 ```
 
 ## Attribute-wise Analysis
 
-We started studying attributes by showing their summary which contains basic statistical metrics. There are no missing values as we got rid of them earlier.
+We started studying attributes by showing their summary which contains basic statistical metrics. There are no missing values as we've got rid of them earlier.
 ```{r}
-kable_styling(kable(summary(imputed_data)))
+summary(imputed_data) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c('striped', 'hover')) %>%
+  scroll_box(width = '100%')
 ```
 
-Figure below presents correlation matrix (or rather its upper part). Attribute `length` is negatively correlated with sea surface temperature, but besides that it is fairly weakly connected with other attributes.
+Figure below presents a correlation matrix (or rather its upper part). Attribute `length` has fairly strong negative correlation with sea surface temperature, but besides that it is fairly weakly connected with other attributes. See surface temperature is connected to North Atlantic oscillation. When NAO phase is positive when the difference between air pressure in Azores and Iceland is higher than usual. This difference causes westerlies (steady winds blowing from the west) to change their path towards north-east. Because of that temperature of air and water around Icelandic Low starts to rise.
 ```{r}
-#corrplot(imputed_data, type="upper", order="hclust", tl.col="black", tl.srt=45)
 cor_data <- select(imputed_data, -c('xmonth', 'X'))
 corrplot(cor(cor_data), type='upper', order='hclust', tl.col='black', tl.srt=55, title="Correlation matrix")
 ```
 
-The chart below presents how a leanth of herrings was changing over time. Blue line is an effect of smooth function. It allows us to clearly see trend present in data. There is noticeable breakpoint.
-```{r message=FALSE}
+The chart below presents how a leanth of herrings was changing over time. Blue line is an effect of smooth function. It allows us to clearly see trend present in data. There is noticeable breakpoint. It is worth noting that `X` variable which occupies x axis in following figure is not equivalent to time. Values of `X` are the indices of hronologically sorted events, but time between measuruments was not specified and therefore we cannot preceive that as time series. This can be seen as additional noise in data.
+```{r message=FALSE, echo=FALSE}
 tmp <- imputed_data %>%
           dplyr::slice(seq(1, nrow(imputed_data), 50))
 
@@ -166,25 +178,26 @@ p <- ggplotly(p)
 p
 ```
 
-It is standard practice to check distributions of data plotting histograms and measure the distribution skewness.
-```{r}
+Below are plots presenting histograms for all attributes. Looking at distribution of different values helps us get a better understanding theirs pattern.
+It is a standard practice to check distributions of data plotting histograms and measure the distribution skewness, therefore  there is a skewness value printed after each chart.
+```{r message=FALSE, echo=FALSE}
 
 for(col in colnames(imputed_data)){
   if(col != "X"){
-  plot <- qplot(imputed_data[[col]], xlab=col) + ggtitle("")
+  plot <- qplot(imputed_data[[col]], xlab=col) + ggtitle(paste(c('Histogram of', col, 'attribute'), collapse = ' ')) + ylab("Number of values in bin")
   print(plot)
-  print(skewness(imputed_data[[col]]))
+  print(paste(c("Skewness:",skewness(imputed_data[[col]])), collapse = ' '))
   }
 }
 ```
-There are some variables that should be looked closer upon. For those that skewness was > 2 a log transform will be used. There could be more analysis done to all of the variables but authors decide that it is enough to further investigate only some of them. Depending on the number of zeros there will be a constant (before a log transform) added or dummy variable introduced that takes value of 1 if the column was zero and 0 otherwise. This way a more suitable distribution can be obtained and important information regarding zeros in the data kept.
+There are some variables that require closer look. For those that skewness was > 2 a log transform will be used. There could be more analysis done to all of the variables but authors decided that it is enough to further investigate only some of them. Depending on the number of zeros there will be a constant (before a log transform) added or dummy variable introduced that takes value of 1 if the column was zero and 0 otherwise. This way a more suitable distribution can be obtained and important information regarding zeros in the data kept.
 
 ```{r} 
 number_of_zeros = NROW(imputed_data$cfin1[imputed_data$cfin1== 0])
 
 ```
 
-For the variable cfin1 - log transform was used and a dummy variable introduced. There were  `r number_of_zeros/NROW(imputed_data)`% zero values in this column.
+For the variable `cfin1` - log transform was used and a dummy variable introduced. There were  `r number_of_zeros/NROW(imputed_data)`% zero values in this column.
 
 ```{r message=FALSE}
   print(paste("Number of zeros: ", number_of_zeros))
@@ -201,7 +214,7 @@ number_of_zeros = NROW(imputed_data$cfin2[imputed_data$cfin2== 0])
 
 ```
 
-Same technique was used for cfin2 variable as there were still `r number_of_zeros/NROW(imputed_data)`% records with zero values.
+Same technique was used for `cfin2` variable as there were still `r number_of_zeros/NROW(imputed_data)`% records with zero values.
 ```{r message=FALSE}
   print(paste("Number of zeros: ", number_of_zeros))
   imputed_data$cfin2Changed[imputed_data$cfin2 > 0] <- log(imputed_data$cfin2[imputed_data$cfin2 > 0])
@@ -218,7 +231,7 @@ number_of_zeros = NROW(imputed_data$chel1[imputed_data$chel1== 0])
 
 ```
 
-For 'chel1' there were `r number_of_zeros/NROW(imputed_data)`% zero values (<5%) that is why log transform with an added constant was preferred. The 5% value is not a rule but rather a threshold authors decided on. More appropriate solution could be to test all possible variable setups.
+For `chel1` there were `r number_of_zeros/NROW(imputed_data)`% zero values (<5%) that is why log transform with an added constant was preferred. The 5% value is not a rule but rather a threshold authors decided on. More appropriate solution could be to test all possible variable setups.
 ```{r}
   print(paste("Number of zeros: ", number_of_zeros))
   imputed_data$chel1Changed <- log(imputed_data$chel1 +1)
@@ -232,7 +245,7 @@ number_of_zeros = NROW(imputed_data$lcop1[imputed_data$lcop1== 0])
 
 ```
 
-"lcop1" was only log transformed with an added constant. There were `r number_of_zeros/NROW(imputed_data)`% zero values!
+Attribute `lcop1` was only log transformed with an added constant. There were `r number_of_zeros/NROW(imputed_data)`% zero values!
 
 ```{r}
   print(paste("Number of zeros: ", number_of_zeros))
@@ -243,25 +256,34 @@ number_of_zeros = NROW(imputed_data$lcop1[imputed_data$lcop1== 0])
 ```
 
 ## Regression
-
-First we start with turning `xmonth` into dummy variable. Now there are new columns for each month. Zero indicates that sample was not taken in this month and one if it was taken in month which is specified in the name of the column.
+First we got rid of index `X` column as it should not participate in regression.
 ```{r}
-reg_data <- model.matrix(X ~ ., imputed_data)
-head(reg_data)
+without_X <- select(imputed_data, -c(X))
 ```
 
-Some attributes in this dataset has values measured in tens of thousands while others never exceeds a value of one. If our data will stay in that form some attributes will contribute greatly to the final result while others will be ignored. To make sure that all data equaly participates in learning process it has to be normalized in one way or another. We decided to use simple scale and centering methods from `caret` library. But before that data had to be divided into test and training set. Fitting normalization model can be done just on training dataset, as it would introduce data leak if conducted on the whole dataset.
-
+We had to turn `xmonth` into a dummy variable. Now there are new columns for each month. Zero indicates that sample was not taken in this month and one if it was taken in month which is specified by the name of the column.
 ```{r}
-ctrl <- trainControl(method = "cv", number=8, preProcOptions = c(pcaComp=32), allowParallel = TRUE)
-grid <- expand.grid()
-lm <- train(length~., data = reg_data, method='lm', trControl=ctrl, preProcess=c('center', 'scale', 'pca'))
+dummies <- dummyVars('~.', data=without_X)
+reg_data <- predict(dummies, newdata=without_X)
+head(reg_data) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c('striped', 'hover')) %>%
+  scroll_box(width = '100%')
+```
+
+Some attributes in this dataset have values measured in tens of thousands while others never exceeds a value of one. If our data will stay in that form some attributes will contribute greatly to the final result while others will be ignored. To make sure that all data equaly participates in learning process it has to be normalized in one way or another. We decided to use simple scale and centering methods from `caret` library. But before that data had to be divided into test and training set. Fitting normalization model can be done just on training dataset, as it would introduce data leak if conducted on the the whole dataset.
+
+Linear model was our first choice. Model was evaluated in 8-fold cross-validation. Parameters for preprocessing were set to centering and scaling to make sure that each training set will receive its own normalization process.
+```{r}
+ctrl <- trainControl(method = "cv", number=8, allowParallel = TRUE)
+lm <- train(length~., data = reg_data, method='lm', trControl=ctrl, preProcess=c('center', 'scale'))
 lm
 ```
 
+Second model we've used was `eXtreme Gradient Boosting Tree`. Evaluating was done with 8-fold cross-validation. For this model we prepared grid search object which contained multiple values for `max_depth`, `eta`, `gamma`, `min_child_weight`. Normalization was set to centering and scaling, separately for each coross-validation subprocess.
 ```{r}
 registerDoMC(cores=4)
-ctrl <- trainControl(method = "cv", number=8, preProcOptions = c(psaComp=3), allowParallel = TRUE)
+ctrl <- trainControl(method = "cv", number=8, allowParallel = TRUE)
 grid <- expand.grid(max_depth=c(3,4,5), 
                     subsample=c(1.0), 
                     nrounds=c(200),
@@ -272,3 +294,11 @@ grid <- expand.grid(max_depth=c(3,4,5),
 xgb_tree <- train(length~., data = reg_data, method='xgbTree', trControl=ctrl, tuneGrid=grid, preProcess=c('center', 'scale'))
 xgb_tree
 ```
+
+Expectedly, `eXtreme Gradient Boosting Tree` turned out to be superior model. And as such was used for next step, that is, checking for feature importance in regressing model. Following chart presents importance of each attribute. 
+```{r}
+imp <- varImp(xgb_tree, scale=FALSE)
+plot(imp)
+```
+
+The most important attributes can be found at the top. As expected after analysis of correlation matrix sea surface temperature was the most prominent factor contributing to this regression. 
