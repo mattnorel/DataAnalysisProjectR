@@ -1,12 +1,12 @@
 ---
 title: "Analysis of Herrings Dataset"
 output: 
+  md_document:
+    variant: markdown_github
   html_document:
     toc: true
     toc_float: true
     keep_md: true
-  md_document:
-    variant: markdown_github
 author: "Piotr Kaszuba & Mateusz Norel"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 params:
